@@ -40,8 +40,8 @@ namespace Serilog.Sinks.RavenDB
         /// <summary>Supplies culture-specific formatting information, or null.</summary>
         public IFormatProvider FormatProvider { get; set; }
 
-        /// <summary>Optional default database</summary>
-        public string DefaultDatabase { get; set; } = null;
+        /// <summary>Optional database name. If non is provided the default database if used</summary>
+        public string DatabaseName { get; set; } = null;
 
         /// <summary>Optional time before a logged message will be expired assuming the expiration bundle is installed.
         /// <see cref="System.Threading.Timeout.InfiniteTimeSpan">Timeout.InfiniteTimeSpan</see> (-00:00:00.0010000) means no expiration.

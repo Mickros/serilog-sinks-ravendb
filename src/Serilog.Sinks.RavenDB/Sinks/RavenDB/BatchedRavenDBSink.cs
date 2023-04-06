@@ -47,7 +47,7 @@ namespace Serilog.Sinks.RavenDB
         /// not both.</remarks>
         public async Task EmitBatchAsync(IEnumerable<Events.LogEvent> batch)
         {
-            using (var session = string.IsNullOrWhiteSpace(_options.DefaultDatabase) ? _options.DocumentStore.OpenAsyncSession() : _options.DocumentStore.OpenAsyncSession(_options.DefaultDatabase))
+            using (var session = string.IsNullOrWhiteSpace(_options.DatabaseName) ? _options.DocumentStore.OpenAsyncSession() : _options.DocumentStore.OpenAsyncSession(_options.DatabaseName))
             {
                 foreach (var logEvent in batch)
                 {

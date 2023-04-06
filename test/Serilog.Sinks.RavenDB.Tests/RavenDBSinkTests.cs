@@ -70,6 +70,57 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
+        public void WhenADatabaseNameIsProvidedItIsUsed()
+        {
+            const string databaseName = nameof(WhenADatabaseNameIsProvidedItIsUsed);
+            const string customDB = "NamedDB";
+            using (var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
+            {
+                documentStore.Initialize();
+
+                try
+                {
+                    var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
+                    var exception = new ArgumentException("Mládek");
+                    const LogEventLevel level = LogEventLevel.Information;
+                    const string messageTemplate = "{Song}++";
+                    var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                    var options = new RavenDbSinkOptions
+                    {
+                        DocumentStore = documentStore,
+                        DatabaseName = customDB
+                    };
+                    Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(customDB);
+
+
+                    using (var ravenSink = new BatchedRavenDBSink(options))
+                    {
+                        var template = new MessageTemplateParser().Parse(messageTemplate);
+                        var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
+                        ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    }
+
+                    using (var session = documentStore.OpenSession())
+                    {
+                        var events = session.Query<LogEvent>().Customize(x => x.WaitForNonStaleResults()).ToList();
+                        Assert.Empty(events);
+                    }
+
+                    using (var session = documentStore.OpenSession(customDB))
+                    {
+                        var events = session.Query<LogEvent>().Customize(x => x.WaitForNonStaleResults()).ToList();
+                        Assert.Single(events);
+                    }
+                }
+                finally
+                {
+                    documentStore.Maintenance.Server.Send(new DeleteDatabasesOperation(databaseName, hardDelete: true, fromNode: null, timeToWaitForConfirmation: null));
+                    documentStore.Maintenance.Server.Send(new DeleteDatabasesOperation(customDB, hardDelete: true, fromNode: null, timeToWaitForConfirmation: null));
+                }
+            }
+        }
+
+        [Fact]
         public void WhenAnEventIsWrittenWithExpirationItHasProperMetadata()
         {
             const string databaseName = nameof(WhenAnEventIsWrittenWithExpirationItHasProperMetadata);
