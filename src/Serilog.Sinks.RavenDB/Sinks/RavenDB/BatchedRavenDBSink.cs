@@ -47,7 +47,9 @@ namespace Serilog.Sinks.RavenDB
         /// not both.</remarks>
         public async Task EmitBatchAsync(IEnumerable<Events.LogEvent> batch)
         {
-            using (var session = string.IsNullOrWhiteSpace(_options.DatabaseName) ? _options.DocumentStore.OpenAsyncSession() : _options.DocumentStore.OpenAsyncSession(_options.DatabaseName))
+            using (var session = string.IsNullOrWhiteSpace(_options.DatabaseName)
+                       ? _options.DocumentStore.OpenAsyncSession()
+                       : _options.DocumentStore.OpenAsyncSession(_options.DatabaseName))
             {
                 foreach (var logEvent in batch)
                 {
@@ -55,17 +57,16 @@ namespace Serilog.Sinks.RavenDB
                     await session.StoreAsync(logEventDoc);
 
                     var expiration =
-                        _options.LogExpirationCallback != null ? _options.LogExpirationCallback(logEvent) :
-                        _options.Expiration == null ? Timeout.InfiniteTimeSpan :
-                        logEvent.Level == LogEventLevel.Error || logEvent.Level == LogEventLevel.Fatal ? _options.ErrorExpiration.Value :
-                        _options.Expiration.Value;
+                        _options.LogExpirationCallback?.Invoke(logEvent)
+                        ?? ((logEvent.Level == LogEventLevel.Error || logEvent.Level == LogEventLevel.Fatal) && _options.ErrorExpiration.HasValue
+                            ? _options.ErrorExpiration.Value
+                            : _options.Expiration ?? Timeout.InfiniteTimeSpan);
 
-                    if (expiration != Timeout.InfiniteTimeSpan)
-                    {
-                        var metaData = session.Advanced.GetMetadataFor(logEventDoc);
-                        metaData[Constants.Documents.Metadata.Expires] = DateTime.UtcNow.Add(expiration);
-                    }
+                    if (expiration == Timeout.InfiniteTimeSpan) continue;
+                    var metaData = session.Advanced.GetMetadataFor(logEventDoc);
+                    metaData[Constants.Documents.Metadata.Expires] = DateTime.UtcNow.Add(expiration);
                 }
+
                 await session.SaveChangesAsync();
             }
         }
