@@ -17,6 +17,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client;
+using Raven.Client.Documents.BulkInsert;
+using Raven.Client.Json;
 using Serilog.Events;
 using Serilog.Sinks.PeriodicBatching;
 using LogEvent = Serilog.Sinks.RavenDB.Data.LogEvent;
@@ -45,7 +47,20 @@ namespace Serilog.Sinks.RavenDB
         /// <param name="batch">The events to emit.</param>
         /// <remarks>Override either <see cref="PeriodicBatchingSink.EmitBatch"/> or <see cref="PeriodicBatchingSink.EmitBatchAsync"/>,
         /// not both.</remarks>
-        public async Task EmitBatchAsync(IEnumerable<Events.LogEvent> batch)
+        public Task EmitBatchAsync(IEnumerable<Events.LogEvent> batch)
+        {
+            switch (_options.StorageMethod)
+            {
+                case RavenDBSinkStorageMethod.Session:
+                    return UseDBSession(batch);
+                case RavenDBSinkStorageMethod.BulkInsert:
+                    return UseDBBulkInsert(batch);
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        private async Task UseDBSession(IEnumerable<Events.LogEvent> batch)
         {
             using (var session = string.IsNullOrWhiteSpace(_options.DatabaseName)
                        ? _options.DocumentStore.OpenAsyncSession()
@@ -56,11 +71,7 @@ namespace Serilog.Sinks.RavenDB
                     var logEventDoc = new LogEvent(logEvent, logEvent.RenderMessage(_options.FormatProvider));
                     await session.StoreAsync(logEventDoc);
 
-                    var expiration =
-                        _options.LogExpirationCallback?.Invoke(logEvent)
-                        ?? ((logEvent.Level == LogEventLevel.Error || logEvent.Level == LogEventLevel.Fatal) && _options.ErrorExpiration.HasValue
-                            ? _options.ErrorExpiration.Value
-                            : _options.Expiration ?? Timeout.InfiniteTimeSpan);
+                    var expiration = DetermineExpiration(logEvent);
 
                     if (expiration == Timeout.InfiniteTimeSpan) continue;
                     var metaData = session.Advanced.GetMetadataFor(logEventDoc);
@@ -69,6 +80,39 @@ namespace Serilog.Sinks.RavenDB
 
                 await session.SaveChangesAsync();
             }
+        }
+        private async Task UseDBBulkInsert(IEnumerable<Events.LogEvent> batch)
+        {
+            BulkInsertOperation bulkInsert = null;
+            try
+            {
+                bulkInsert = _options.DocumentStore.BulkInsert(_options.DatabaseName);
+                foreach (var logEvent in batch)
+                {
+                    var metadata = new MetadataAsDictionary();
+                    var logEventDoc = new LogEvent(logEvent, logEvent.RenderMessage(_options.FormatProvider));
+                    var expiration = DetermineExpiration(logEvent);
+
+                    if (expiration != Timeout.InfiniteTimeSpan)
+                        metadata.Add(Constants.Documents.Metadata.Expires, DateTime.UtcNow.Add(expiration));
+                    await bulkInsert.StoreAsync(logEventDoc, metadata);
+                }
+            }
+            finally
+            {
+                if (bulkInsert != null)
+                {
+                    await bulkInsert.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+        }
+
+        private TimeSpan DetermineExpiration(Events.LogEvent logEvent)
+        {
+            return _options.LogExpirationCallback?.Invoke(logEvent)
+                   ?? ((logEvent.Level == LogEventLevel.Error || logEvent.Level == LogEventLevel.Fatal) && _options.ErrorExpiration.HasValue
+                       ? _options.ErrorExpiration.Value
+                       : _options.Expiration ?? Timeout.InfiniteTimeSpan);
         }
 
         public Task OnEmptyBatchAsync()

@@ -14,6 +14,7 @@
 
 using System;
 using Raven.Client.Documents;
+using Serilog.Events;
 using Serilog.Sinks.PeriodicBatching;
 
 namespace Serilog.Sinks.RavenDB
@@ -40,6 +41,9 @@ namespace Serilog.Sinks.RavenDB
 
         /// <summary>Optional database name. If non is provided the default database if used</summary>
         public string DatabaseName { get; set; } = null;
+
+        /// <summary>Optional database name. If non is provided the default database if used</summary>
+        public RavenDBSinkStorageMethod StorageMethod { get; set; } = RavenDBSinkStorageMethod.Session;
 
         #region Expiration Options
         /// <summary>Optional time before a logged message will be expired assuming the expiration bundle is installed.

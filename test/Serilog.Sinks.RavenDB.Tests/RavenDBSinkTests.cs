@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Raven.Client;
+using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using Serilog.Events;
 using Serilog.Parsing;
@@ -19,9 +20,9 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAnEventIsWrittenToTheSinkItIsRetrievableFromTheDocumentStore()
+        public void WhenAnEventIsWrittenToTheSinkUsingSessionStorageItIsRetrievableFromTheDocumentStore()
         {
-            const string databaseName = nameof(WhenAnEventIsWrittenToTheSinkItIsRetrievableFromTheDocumentStore);
+            const string databaseName = nameof(WhenAnEventIsWrittenToTheSinkUsingSessionStorageItIsRetrievableFromTheDocumentStore);
             using (var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
             {
                 documentStore.Initialize();
@@ -68,9 +69,9 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenADatabaseNameIsProvidedItIsUsed()
+        public void WhenADatabaseNameIsProvidedItIsUsedWithSessionStorage()
         {
-            const string databaseName = nameof(WhenADatabaseNameIsProvidedItIsUsed);
+            const string databaseName = nameof(WhenADatabaseNameIsProvidedItIsUsedWithSessionStorage);
             const string customDB = "NamedDB";
             using (var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
             {
@@ -119,9 +120,9 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAnEventIsWrittenWithExpirationItHasProperMetadata()
+        public void WhenAnEventIsWrittenWithExpirationUsingSessionStorageItHasProperMetadata()
         {
-            const string databaseName = nameof(WhenAnEventIsWrittenWithExpirationItHasProperMetadata);
+            const string databaseName = nameof(WhenAnEventIsWrittenWithExpirationUsingSessionStorageItHasProperMetadata);
             using (var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
             {
                 documentStore.Initialize();
@@ -141,6 +142,156 @@ namespace Serilog.Sinks.RavenDB.Tests
                         DocumentStore = documentStore,
                         Expiration = expiration,
                         ErrorExpiration = errorExpiration
+                    };
+
+
+                    using (var ravenSink = new BatchedRavenDBSink(options))
+                    {
+                        var template = new MessageTemplateParser().Parse(messageTemplate);
+                        var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
+                        ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    }
+
+                    using (var session = documentStore.OpenSession())
+                    {
+                        var logEvent = session.Query<LogEvent>().Customize(x => x.WaitForNonStaleResults()).First();
+                        var metaData = session.Advanced.GetMetadataFor(logEvent)[Constants.Documents.Metadata.Expires].ToString();
+                        var actualExpiration = Convert.ToDateTime(metaData).ToUniversalTime();
+                        Assert.True(actualExpiration >= targetExpiration, $"The document should expire on or after {targetExpiration} but expires {actualExpiration}");
+                    }
+                }
+                finally
+                {
+                    documentStore.Maintenance.Server.Send(new DeleteDatabasesOperation(databaseName, hardDelete: true, fromNode: null, timeToWaitForConfirmation: null));
+                }
+            }
+        }
+ 
+        [Fact]
+        public void WhenAnEventIsWrittenToTheSinkUsingBulkInsertStorageItIsRetrievableFromTheDocumentStore()
+        {
+            const string databaseName = nameof(WhenAnEventIsWrittenToTheSinkUsingBulkInsertStorageItIsRetrievableFromTheDocumentStore);
+            using (var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
+            {
+                documentStore.Initialize();
+
+                try
+                {
+                    var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
+                    var exception = new ArgumentException("Mládek");
+                    const LogEventLevel level = LogEventLevel.Information;
+                    const string messageTemplate = "{Song}++";
+                    var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                    var options = new RavenDbSinkOptions
+                    {
+                        DocumentStore = documentStore,
+                        StorageMethod = RavenDBSinkStorageMethod.BulkInsert
+                    };
+
+                    using (var ravenSink = new BatchedRavenDBSink(options))
+                    {
+                        var template = new MessageTemplateParser().Parse(messageTemplate);
+                        var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
+                        ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    }
+
+                    using (var session = documentStore.OpenSession())
+                    {
+                        var events = session.Query<LogEvent>().Customize(x => x.WaitForNonStaleResults()).ToList();
+                        Assert.Single(events);
+                        var single = events.Single();
+                        Assert.Equal(messageTemplate, single.MessageTemplate);
+                        Assert.Equal("\"New Macabre\"++", single.RenderedMessage);
+                        Assert.Equal(timestamp, single.Timestamp);
+                        Assert.Equal(level, single.Level);
+                        Assert.Equal(1, single.Properties.Count);
+                        Assert.Equal("New Macabre", single.Properties["Song"]);
+                        // BUG Exception Deserializing fails and does not reproduce an object equivalent to the one stored in the DB
+                        //Assert.Equal(exception.Message, single.Exception.Message);
+                    }
+                }
+                finally
+                {
+                    documentStore.Maintenance.Server.Send(new DeleteDatabasesOperation(databaseName, hardDelete: true, fromNode: null, timeToWaitForConfirmation: null));
+                }
+            }
+        }
+
+        [Fact]
+        public void WhenADatabaseNameIsProvidedItIsUsedWithBulkInsertStorage()
+        {
+            const string databaseName = nameof(WhenADatabaseNameIsProvidedItIsUsedWithBulkInsertStorage);
+            const string customDB = "NamedDB";
+            using (var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
+            {
+                documentStore.Initialize();
+
+                try
+                {
+                    var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
+                    var exception = new ArgumentException("Mládek");
+                    const LogEventLevel level = LogEventLevel.Information;
+                    const string messageTemplate = "{Song}++";
+                    var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                    var options = new RavenDbSinkOptions
+                    {
+                        DocumentStore = documentStore,
+                        DatabaseName = customDB,
+                        StorageMethod = RavenDBSinkStorageMethod.BulkInsert
+                    };
+
+                    documentStore.Maintenance.Server.Send(new CreateDatabaseOperation(new DatabaseRecord(customDB)));
+                    using (var ravenSink = new BatchedRavenDBSink(options))
+                    {
+                        var template = new MessageTemplateParser().Parse(messageTemplate);
+                        var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
+                        ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    }
+
+                    using (var session = documentStore.OpenSession())
+                    {
+                        var events = session.Query<LogEvent>().Customize(x => x.WaitForNonStaleResults()).ToList();
+                        Assert.Empty(events);
+                    }
+
+                    using (var session = documentStore.OpenSession(customDB))
+                    {
+                        var events = session.Query<LogEvent>().Customize(x => x.WaitForNonStaleResults()).ToList();
+                        Assert.Single(events);
+                    }
+                }
+                finally
+                {
+                    documentStore.Maintenance.Server.Send(new DeleteDatabasesOperation(databaseName, hardDelete: true, fromNode: null, timeToWaitForConfirmation: null));
+                    documentStore.Maintenance.Server.Send(new DeleteDatabasesOperation(customDB, hardDelete: true, fromNode: null, timeToWaitForConfirmation: null));
+                }
+            }
+        }
+
+        [Fact]
+        public void WhenAnEventIsWrittenWithExpirationUsingBulkInsertStorageItHasProperMetadata()
+        {
+            const string databaseName = nameof(WhenAnEventIsWrittenWithExpirationUsingBulkInsertStorageItHasProperMetadata);
+            using (var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
+            {
+                documentStore.Initialize();
+
+                try
+                {
+                    var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
+                    var expiration = TimeSpan.FromDays(1);
+                    var errorExpiration = TimeSpan.FromMinutes(15);
+                    var targetExpiration = DateTime.UtcNow.Add(expiration);
+                    var exception = new ArgumentException("Mládek");
+                    const LogEventLevel level = LogEventLevel.Information;
+                    const string messageTemplate = "{Song}++";
+                    var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                    var options = new RavenDbSinkOptions
+                    {
+                        DocumentStore = documentStore,
+                        Expiration = expiration,
+                        ErrorExpiration = errorExpiration,
+                        StorageMethod = RavenDBSinkStorageMethod.BulkInsert
                     };
 
 
