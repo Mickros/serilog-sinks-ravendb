@@ -8,6 +8,7 @@
         <SignAssembly>true</SignAssembly>
         <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>
         <PackageId>Serilog.Sinks.RavenDB.Tests</PackageId>
+        <LangVersion>10.0</LangVersion>
         <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
     </PropertyGroup>
 
