@@ -13,8 +13,6 @@ namespace Serilog.Sinks.RavenDB.Tests
 {
     public class RavenDBSinkTests
     {
-        private static readonly TimeSpan TinyWait = TimeSpan.FromMilliseconds(50);
-
         static RavenDBSinkTests()
         {
             Raven.Embedded.EmbeddedServer.Instance.StartServer();
@@ -182,7 +180,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                     var expiration = TimeSpan.FromDays(1);
                     var errorExpiration = TimeSpan.FromMinutes(15);
                     var targetExpiration = DateTime.UtcNow.Add(expiration);
-                    TimeSpan func(Events.LogEvent le) => le.Level == LogEventLevel.Information ? expiration : errorExpiration;
+                    TimeSpan Func(Events.LogEvent le) => le.Level == LogEventLevel.Information ? expiration : errorExpiration;
                     var exception = new ArgumentException("Ml�dek");
                     const LogEventLevel level = LogEventLevel.Information;
                     const string messageTemplate = "{Song}++";
@@ -190,7 +188,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                     var options = new RavenDbSinkOptions
                     {
                         DocumentStore = documentStore,
-                        LogExpirationCallback = func
+                        LogExpirationCallback = Func
                     };
 
                     using (var ravenSink = new BatchedRavenDBSink(options))
@@ -453,7 +451,6 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
                     var expiration = Timeout.InfiniteTimeSpan;
-                    var targetExpiration = DateTime.UtcNow.Add(expiration);
                     var exception = new ArgumentException("Mládek");
                     const LogEventLevel level = LogEventLevel.Information;
                     const string messageTemplate = "{Song}++";
@@ -496,7 +493,6 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
                     var errorExpiration = Timeout.InfiniteTimeSpan;
-                    var targetExpiration = DateTime.UtcNow.Add(errorExpiration);
                     var exception = new ArgumentException("Mládek");
                     const LogEventLevel level = LogEventLevel.Error;
                     const string messageTemplate = "{Song}++";
@@ -540,7 +536,7 @@ namespace Serilog.Sinks.RavenDB.Tests
             const string databaseName = nameof(WhenUsingConnectionStringInCtorInternalDocumentStoreIsCreated);
             using (var store = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName))
             {
-                store.OnBeforeStore += (sender, e) => events[e.DocumentId] = (LogEvent)e.Entity;
+                store.OnBeforeStore += (_, e) => events[e.DocumentId] = (LogEvent)e.Entity;
                 store.Initialize();
 
                 try

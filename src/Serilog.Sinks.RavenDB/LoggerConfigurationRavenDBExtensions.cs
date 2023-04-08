@@ -1,5 +1,4 @@
 ﻿using System;
-using Raven.Client.Documents;
 using Serilog.Configuration;
 using Serilog.Core;
 using Serilog.Events;
