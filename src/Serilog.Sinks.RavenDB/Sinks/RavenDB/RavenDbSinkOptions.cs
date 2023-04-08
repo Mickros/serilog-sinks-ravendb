@@ -42,7 +42,7 @@ namespace Serilog.Sinks.RavenDB
         /// <summary>Optional database name. If non is provided the default database if used</summary>
         public string DatabaseName { get; set; } = null;
 
-        /// <summary>Optional database name. If non is provided the default database if used</summary>
+        /// <summary>Defines how Log event is send to the Database</summary>
         public RavenDBSinkStorageMethod StorageMethod { get; set; } = RavenDBSinkStorageMethod.Session;
 
         #region Expiration Options
@@ -54,9 +54,6 @@ namespace Serilog.Sinks.RavenDB
             get => _expiration ?? _errorExpiration;
             set => _expiration = value;
         }
-
-        //_errorExpiration = errorExpiration ?? expiration;
-        //_expiration = expiration ?? errorExpiration;
 
         /// <summary>Optional time before a logged error message will be expired assuming the expiration bundle is installed.
         /// <see cref="System.Threading.Timeout.InfiniteTimeSpan">Timeout.InfiniteTimeSpan</see> (-00:00:00.0010000) means no expiration.
