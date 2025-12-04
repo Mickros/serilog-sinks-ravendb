@@ -15,10 +15,10 @@
     <ItemGroup>
         <PackageReference Include="RavenDB.Embedded" Version="5.4.103" />
 
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.5.0" />
-        <PackageReference Include="xunit" Version="2.4.2" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+        <PackageReference Include="xunit" Version="2.9.3" />
         <!-- xunit.runner.visualstudio doesn't include a .net standard version, but this works anyway, so NoWarn -->
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5" NoWarn="NU1701">
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" NoWarn="NU1701">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>

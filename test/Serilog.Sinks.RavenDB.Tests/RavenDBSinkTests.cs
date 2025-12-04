@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Raven.Client;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
@@ -20,19 +21,19 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAnEventIsWrittenToTheSinkUsingSessionStorageItIsRetrievableFromTheDocumentStore()
+        public async Task WhenAnEventIsWrittenToTheSinkUsingSessionStorageItIsRetrievableFromTheDocumentStore()
         {
             const string databaseName = nameof(WhenAnEventIsWrittenToTheSinkUsingSessionStorageItIsRetrievableFromTheDocumentStore);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
             {
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore
@@ -42,7 +43,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using var session = documentStore.OpenSession();
@@ -53,7 +54,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 Assert.Equal("\"New Macabre\"++", single.RenderedMessage);
                 Assert.Equal(timestamp, single.Timestamp);
                 Assert.Equal(level, single.Level);
-                Assert.Equal(1, single.Properties.Count);
+                Assert.Single(single.Properties);
                 Assert.Equal("New Macabre", single.Properties["Song"]);
 
                 // BUG Exception Deserializing fails and does not reproduce an object equivalent to the one stored in the DB
@@ -66,33 +67,33 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenADatabaseNameIsProvidedItIsUsedWithSessionStorage()
+        public async Task WhenADatabaseNameIsProvidedItIsUsedWithSessionStorage()
         {
             const string databaseName = nameof(WhenADatabaseNameIsProvidedItIsUsedWithSessionStorage);
             const string customDB = "NamedDB";
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
             {
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
                     DatabaseName = customDB
                 };
-                Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(customDB);
+                await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(customDB);
 
 
                 using (var ravenSink = new BatchedRavenDBSink(options))
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -115,10 +116,10 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAnEventIsWrittenWithExpirationUsingSessionStorageItHasProperMetadata()
+        public async Task WhenAnEventIsWrittenWithExpirationUsingSessionStorageItHasProperMetadata()
         {
             const string databaseName = nameof(WhenAnEventIsWrittenWithExpirationUsingSessionStorageItHasProperMetadata);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
@@ -127,10 +128,10 @@ namespace Serilog.Sinks.RavenDB.Tests
                 var expiration = TimeSpan.FromDays(1);
                 var errorExpiration = TimeSpan.FromMinutes(15);
                 var targetExpiration = DateTime.UtcNow.Add(expiration);
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -143,7 +144,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -161,19 +162,19 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
  
         [Fact]
-        public void WhenAnEventIsWrittenToTheSinkUsingBulkInsertStorageItIsRetrievableFromTheDocumentStore()
+        public async Task WhenAnEventIsWrittenToTheSinkUsingBulkInsertStorageItIsRetrievableFromTheDocumentStore()
         {
             const string databaseName = nameof(WhenAnEventIsWrittenToTheSinkUsingBulkInsertStorageItIsRetrievableFromTheDocumentStore);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
             {
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -184,7 +185,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using var session = documentStore.OpenSession();
@@ -195,7 +196,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 Assert.Equal("\"New Macabre\"++", single.RenderedMessage);
                 Assert.Equal(timestamp, single.Timestamp);
                 Assert.Equal(level, single.Level);
-                Assert.Equal(1, single.Properties.Count);
+                Assert.Single(single.Properties);
                 Assert.Equal("New Macabre", single.Properties["Song"]);
 
                 // BUG Exception Deserializing fails and does not reproduce an object equivalent to the one stored in the DB
@@ -208,20 +209,20 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenADatabaseNameIsProvidedItIsUsedWithBulkInsertStorage()
+        public async Task WhenADatabaseNameIsProvidedItIsUsedWithBulkInsertStorage()
         {
             const string databaseName = nameof(WhenADatabaseNameIsProvidedItIsUsedWithBulkInsertStorage);
             const string customDB = "NamedDB";
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
             {
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -234,7 +235,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -257,10 +258,10 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAnEventIsWrittenWithExpirationUsingBulkInsertStorageItHasProperMetadata()
+        public async Task WhenAnEventIsWrittenWithExpirationUsingBulkInsertStorageItHasProperMetadata()
         {
             const string databaseName = nameof(WhenAnEventIsWrittenWithExpirationUsingBulkInsertStorageItHasProperMetadata);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
@@ -269,10 +270,10 @@ namespace Serilog.Sinks.RavenDB.Tests
                 var expiration = TimeSpan.FromDays(1);
                 var errorExpiration = TimeSpan.FromMinutes(15);
                 var targetExpiration = DateTime.UtcNow.Add(expiration);
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -286,7 +287,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -304,10 +305,10 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAnEventIsWrittenWithExpirationCallbackItHasProperMetadata()
+        public async Task WhenAnEventIsWrittenWithExpirationCallbackItHasProperMetadata()
         {
             const string databaseName = nameof(WhenAnErrorEventIsWrittenWithExpirationItHasProperMetadata);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
@@ -320,7 +321,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 var exception = new ArgumentException("Ml�dek");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -331,7 +332,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -349,10 +350,10 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAnErrorEventIsWrittenWithExpirationItHasProperMetadata()
+        public async Task WhenAnErrorEventIsWrittenWithExpirationItHasProperMetadata()
         {
             const string databaseName = nameof(WhenAnErrorEventIsWrittenWithExpirationItHasProperMetadata);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
@@ -361,10 +362,10 @@ namespace Serilog.Sinks.RavenDB.Tests
                 var errorExpiration = TimeSpan.FromDays(1);
                 var expiration = TimeSpan.FromMinutes(15);
                 var targetExpiration = DateTime.UtcNow.Add(errorExpiration);
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Error;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -376,7 +377,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -394,10 +395,10 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenAFatalEventIsWrittenWithExpirationItHasProperMetadata()
+        public async Task WhenAFatalEventIsWrittenWithExpirationItHasProperMetadata()
         {
             const string databaseName = nameof(WhenAFatalEventIsWrittenWithExpirationItHasProperMetadata);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
@@ -406,10 +407,10 @@ namespace Serilog.Sinks.RavenDB.Tests
                 var errorExpiration = TimeSpan.FromDays(1);
                 var expiration = TimeSpan.FromMinutes(15);
                 var targetExpiration = DateTime.UtcNow.Add(errorExpiration);
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Fatal;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -421,7 +422,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -439,10 +440,10 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenNoErrorExpirationSetBuExpirationSetUseExpirationForErrors()
+        public async Task WhenNoErrorExpirationSetBuExpirationSetUseExpirationForErrors()
         {
             const string databaseName = nameof(WhenNoErrorExpirationSetBuExpirationSetUseExpirationForErrors);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
@@ -450,10 +451,10 @@ namespace Serilog.Sinks.RavenDB.Tests
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
                 var expiration = TimeSpan.FromMinutes(15);
                 var targetExpiration = DateTime.UtcNow.Add(expiration);
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Fatal;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -464,7 +465,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -483,10 +484,10 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenNoExpirationSetBuErrorExpirationSetUseErrorExpirationForMessages()
+        public async Task WhenNoExpirationSetBuErrorExpirationSetUseErrorExpirationForMessages()
         {
             const string databaseName = nameof(WhenNoExpirationSetBuErrorExpirationSetUseErrorExpirationForMessages);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
@@ -494,10 +495,10 @@ namespace Serilog.Sinks.RavenDB.Tests
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
                 var errorExpiration = TimeSpan.FromMinutes(15);
                 var targetExpiration = DateTime.UtcNow.Add(errorExpiration);
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -508,7 +509,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -526,18 +527,18 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenNoExpirationIsProvidedMessagesDontExpire()
+        public async Task WhenNoExpirationIsProvidedMessagesDontExpire()
         {
             const string databaseName = nameof(WhenNoExpirationIsProvidedMessagesDontExpire);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
             try
             {
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Error;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore
@@ -547,7 +548,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -564,20 +565,20 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenExpirationSetToInfiniteMessagesDontExpire()
+        public async Task WhenExpirationSetToInfiniteMessagesDontExpire()
         {
             const string databaseName = nameof(WhenExpirationSetToInfiniteMessagesDontExpire);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
             {
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
                 var expiration = Timeout.InfiniteTimeSpan;
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Information;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -588,7 +589,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -604,20 +605,20 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenErrorExpirationSetToInfiniteErrorsDontExpire()
+        public async Task WhenErrorExpirationSetToInfiniteErrorsDontExpire()
         {
             const string databaseName = nameof(WhenErrorExpirationSetToInfiniteErrorsDontExpire);
-            using var documentStore = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var documentStore = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             documentStore.Initialize();
 
             try
             {
                 var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
                 var errorExpiration = Timeout.InfiniteTimeSpan;
-                var exception = new ArgumentException("Mládek");
+                var exception = new ArgumentException("Test Exception");
                 const LogEventLevel level = LogEventLevel.Error;
                 const string messageTemplate = "{Song}++";
-                var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
+                var properties = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
                 var options = new RavenDbSinkOptions
                 {
                     DocumentStore = documentStore,
@@ -628,7 +629,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 using (var session = documentStore.OpenSession())
@@ -644,17 +645,17 @@ namespace Serilog.Sinks.RavenDB.Tests
         }
 
         [Fact]
-        public void WhenUsingConnectionStringInCtorInternalDocumentStoreIsCreated()
+        public async Task WhenUsingConnectionStringInCtorInternalDocumentStoreIsCreated()
         {
-            var timestamp = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
-            var exception = new ArgumentException("Mládek");
-            const LogEventLevel level = LogEventLevel.Information;
-            const string messageTemplate = "{Song}++";
-            var properties = new List<LogEventProperty> { new LogEventProperty("Song", new ScalarValue("New Macabre")) };
-            var events = new Dictionary<string, LogEvent>();
+            var                 timestamp       = new DateTimeOffset(2013, 05, 28, 22, 10, 20, 666, TimeSpan.FromHours(10));
+            var                 exception       = new ArgumentException("Test Exception");
+            const LogEventLevel level           = LogEventLevel.Information;
+            const string        messageTemplate = "{Song}++";
+            var                 properties      = new List<LogEventProperty> { new("Song", new ScalarValue("New Macabre")) };
+            var                 events          = new Dictionary<string, LogEvent>();
 
             const string databaseName = nameof(WhenUsingConnectionStringInCtorInternalDocumentStoreIsCreated);
-            using var store = Raven.Embedded.EmbeddedServer.Instance.GetDocumentStore(databaseName);
+            using var store = await Raven.Embedded.EmbeddedServer.Instance.GetDocumentStoreAsync(databaseName);
             store.OnBeforeStore += (_, e) => events[e.DocumentId] = (LogEvent)e.Entity;
             store.Initialize();
 
@@ -669,7 +670,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 {
                     var template = new MessageTemplateParser().Parse(messageTemplate);
                     var logEvent = new Events.LogEvent(timestamp, level, exception, template, properties);
-                    ravenSink.EmitBatchAsync(new[] { logEvent }).Wait();
+                    await ravenSink.EmitBatchAsync(new[] { logEvent });
                 }
 
                 Assert.Single(events);
@@ -678,7 +679,7 @@ namespace Serilog.Sinks.RavenDB.Tests
                 Assert.Equal("\"New Macabre\"++", single.RenderedMessage);
                 Assert.Equal(timestamp, single.Timestamp);
                 Assert.Equal(level, single.Level);
-                Assert.Equal(1, single.Properties.Count);
+                Assert.Single(single.Properties);
                 Assert.Equal("New Macabre", single.Properties["Song"]);
                 Assert.Equal(exception.Message, single.Exception.Message);
             }
