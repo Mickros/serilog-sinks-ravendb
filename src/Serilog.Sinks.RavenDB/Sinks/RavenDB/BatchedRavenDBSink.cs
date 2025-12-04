@@ -45,7 +45,7 @@ namespace Serilog.Sinks.RavenDB
         /// Emit a batch of log events, running asynchronously.
         /// </summary>
         /// <param name="batch">The events to emit.</param>
-        /// <remarks>Override either <see cref="PeriodicBatchingSink.EmitBatch"/> or <see cref="PeriodicBatchingSink.EmitBatchAsync"/>,
+        /// <remarks>Override either <see cref="Serilog.Sinks.PeriodicBatching.PeriodicBatchingSink.EmitBatch(System.Collections.Generic.IEnumerable{Serilog.Events.LogEvent})" /> or <see cref="Serilog.Sinks.PeriodicBatching.PeriodicBatchingSink.EmitBatchAsync(System.Collections.Generic.IEnumerable{Serilog.Events.LogEvent})" />,
         /// not both.</remarks>
         public Task EmitBatchAsync(IEnumerable<Events.LogEvent> batch)
         {

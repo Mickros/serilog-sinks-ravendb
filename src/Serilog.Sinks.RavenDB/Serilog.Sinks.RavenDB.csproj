@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <Description>Write Serilog events to a RavenDB database.</Description>
-        <VersionPrefix>4.2.0</VersionPrefix>
+        <VersionPrefix>4.3.0</VersionPrefix>
         <Authors>Serilog Contributors</Authors>
         <TargetFrameworks>netstandard2.0</TargetFrameworks>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -28,7 +28,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="RavenDB.Client" Version="5.4.103" />
+        <PackageReference Include="RavenDB.Client" Version="7.1.4" />
         <PackageReference Include="Serilog.Sinks.PeriodicBatching" Version="5.0.0" />
         <PackageReference Include="Serilog" Version="4.3.0" />
     </ItemGroup>
